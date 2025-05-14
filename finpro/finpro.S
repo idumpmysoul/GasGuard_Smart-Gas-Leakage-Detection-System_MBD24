@@ -1,211 +1,234 @@
 #define __SFR_OFFSET 0x00
 #include <avr/io.h>
 
-.section .vectors, "a", @progbits
-    rjmp main                 ; Reset vector
-    rjmp INT0_vect            ; External Interrupt Request 0
-    .org 0x001E
-    rjmp TIMER1_COMPA_vect    ; Timer1 Compare A interrupt
-
 .section .text
 .global main
-.global INT0_vect
-.global TIMER1_COMPA_vect
 
 main:
-    ; Set stack pointer
-    LDI   R16, 0x08
-    OUT   SPH, R16
-    LDI   R16, 0xFF
-    OUT   SPL, R16
+    ; ------------------ Stack Pointer ------------------
+    ldi r16, 0x08
+    out SPH, r16
+    ldi r16, 0xFF
+    out SPL, r16
 
-    ; Initialize peripherals
-    rcall init_io
-    rcall init_adc
-    rcall init_uart
-    rcall init_spi
-    rcall init_max7219
-    rcall init_timer
-    rcall init_interrupts
+    ; ------------------ GPIO Setup ------------------
+    ldi r16, (1<<5)|(1<<6)|(1<<7)   ; PD5-7 as output (LEDs)
+    out DDRD, r16
+    sbi DDRB, 0                     ; PB0 as output (Buzzer)
 
-    sei
-main_loop:
-    rjmp main_loop
-
-; ---------------------------
-; Initialization Routines
-; ---------------------------
-init_io:
-    sbi DDRD, 5    ; Green LED
-    sbi DDRD, 6    ; Yellow LED
-    sbi DDRD, 7    ; Red LED
-    sbi DDRB, 0    ; Buzzer
-    ret
-
-init_adc:
-    ldi r16, (1 << REFS0)
-    sts ADMUX, r16
-    ldi r16, (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0)
-    sts ADCSRA, r16
-    ret
-
-init_uart:
-    ldi r16, 103
-    ldi r17, 0x00
-    sts UBRR0H, r17
-    sts UBRR0L, r16
-    ldi r16, (1 << TXEN0)
-    sts UCSR0B, r16
-    ldi r16, (1 << UCSZ01) | (1 << UCSZ00)
-    sts UCSR0C, r16
-    ret
-
-init_spi:
-    ldi r16, (1 << PB2) | (1 << PB3) | (1 << PB5)
+    ; SPI Pins: MOSI (PB3), SCK (PB5), CS (PB2)
+    ldi r16, (1<<2)|(1<<3)|(1<<5)
     out DDRB, r16
-    ldi r16, (1 << SPE) | (1 << MSTR)
-    out SPCR, r16
-    ret
+    sbi PORTB, 2                    ; CS HIGH
 
-init_max7219:
-    ldi r16, 0x09
-    ldi r17, 0x0F
-    rcall spi_write
-    ldi r16, 0x0B
-    ldi r17, 0x03
-    rcall spi_write
-    ldi r16, 0x0C
-    ldi r17, 0x01
-    rcall spi_write
-    ldi r16, 0x0A
-    ldi r17, 0x08
-    rcall spi_write
-    ret
-
-init_timer:
-    ldi r16, (1 << WGM12)             ; Set CTC mode (WGM12 bit)
-    sts TCCR1B, r16                    ; Write to TCCR1B to configure the mode
-
-    ldi r16, 0x68                      ; Load low byte of 15624 (0x3D68) into r16
-    sts OCR1AL, r16                    ; Write low byte to OCR1AL
-    ldi r16, 0x3D                      ; Load high byte of 15624 (0x3D68) into r16
-    sts OCR1AH, r16                    ; Write high byte to OCR1AH
-
-    ldi r16, (1 << OCIE1A)             ; Enable Timer1 compare interrupt A
-    sts TIMSK1, r16                    ; Write to TIMSK1 to enable interrupt
-
-    ldi r16, (1 << CS12) | (1 << CS10) ; Set prescaler (prescaler = 1024)
-    sts TCCR1B, r16                    ; Write to TCCR1B to start the timer with the prescaler
-
-    ret                                 ; Return from function
-
-init_interrupts:
+    ; Button on PD2 input + pull-up
     cbi DDRD, 2
     sbi PORTD, 2
-    ldi r16, (1 << ISC01)
-    sts EICRA, r16
-    ldi r16, (1 << INT0)
-    sts EIMSK, r16
-    ret
 
-; ---------------------------
-; SPI Write
-; ---------------------------
-spi_write:
-    out SPDR, r16
-wait_spi_1:
-    in r18, SPSR
-    sbrs r18, SPIF
-    rjmp wait_spi_1
-    out SPDR, r17
-wait_spi_2:
-    in r18, SPSR
-    sbrs r18, SPIF
-    rjmp wait_spi_2
-    ret
+    ; ------------------ SPI Init ------------------
+    ldi r16, (1<<6)|(1<<4)          ; SPE + MSTR
+    out SPCR, r16
 
-; ---------------------------
-; UART Send
-; ---------------------------
-send_uart:
-    lds r19, UCSR0A
-    sbrs r19, UDRE0
-    rjmp send_uart
-    sts UDR0, r16
-    ret
+    ; ------------------ USART Init ------------------
+    ldi r16, 103                    ; 9600 baud @ 16MHz
+    sts UBRR0L, r16
+    clr r16
+    sts UBRR0H, r16
+    ldi r16, (1<<TXEN0)             ; Enable TX
+    sts UCSR0B, r16
+    ldi r16, (1<<UCSZ01)|(1<<UCSZ00)
+    sts UCSR0C, r16
 
-; ---------------------------
-; BCD Display Routine
-; ---------------------------
-display_value:
-    ; r17:r18 = 10-bit ADC value → r20 = approx ppm
-    mov r20, r17       ; crude ppm from high byte
-    ldi r21, 4         ; 4 digits
-    clr r22            ; digit index
-next_digit:
-    mov r23, r20
-    andi r23, 0x0F     ; get lowest nibble
-    mov r16, r22       ; digit address (0 = rightmost)
-    mov r17, r23       ; digit value
-    rcall spi_write
-    lsr r20
-    lsr r20
-    lsr r20
-    lsr r20
-    inc r22
-    dec r21
-    brne next_digit
-    ret
+    ; ------------------ MAX7219 Init ------------------
+    rcall max7219_init
 
-; ---------------------------
-; Interrupt Vectors
-; ---------------------------
-INT0_vect:
+    ; ------------------ Startup Sequence ------------------
+    rcall blink_leds
+    sbi PORTB, 0        ; Buzzer ON
+    rcall delay_ms
+    cbi PORTB, 0        ; Buzzer OFF
+    rcall display_1234
+    rcall delay_ms
+
+main_loop:
+    ; -------- ADC Init & Start Conversion --------
+    ldi r16, (1<<REFS0)
+    sts ADMUX, r16
+    ldi r16, (1<<ADEN)|(1<<ADSC)|(1<<ADPS1)|(1<<ADPS0)
+    sts ADCSRA, r16
+
+adc_wait:
+    lds r16, ADCSRA
+    sbrs r16, ADIF
+    rjmp adc_wait
+    ldi r16, (1<<ADIF)
+    sts ADCSRA, r16
+
+    ; Read high byte (8-bit result)
+    lds r18, ADCH
+
+    ; Transmit raw ADC value
+    mov r24, r18
+    rcall send_decimal
+
+    ; Evaluate level
+    cpi r18, 50
+    brlo level_safe
+    cpi r18, 150
+    brlo level_warn
+
+level_danger:
+    sbi PORTD, 7
+    cbi PORTD, 6
     cbi PORTD, 5
+    sbi PORTB, 0
+    rjmp display
+
+level_warn:
+    sbi PORTD, 6
+    cbi PORTD, 7
+    cbi PORTD, 5
+    cbi PORTB, 0
+    rjmp display
+
+level_safe:
+    sbi PORTD, 5
     cbi PORTD, 6
     cbi PORTD, 7
     cbi PORTB, 0
-    reti
 
-TIMER1_COMPA_vect:
-    ; Start ADC conversion
-    ldi r16, (1 << ADSC)
-    sts ADCSRA, r16
-wait_adc:
-    lds r16, ADCSRA
-    sbrs r16, ADSC
-    rjmp adc_done
-    rjmp wait_adc
-adc_done:
-    lds r18, ADCL
-    lds r17, ADCH
+display:
+    mov r24, r18
+    rcall display_digits
+    rcall delay_ms
+    rjmp main_loop
 
-    ; Threshold logic
-    cbi PORTD, 5
-    cbi PORTD, 6
-    cbi PORTD, 7
-    cpi r17, 50
-    brlo safe
-    cpi r17, 100
-    brlo warning
-
-danger:
-    sbi PORTD, 7        ; Red
-    sbi PORTB, 0        ; Buzzer
-    rjmp update_display
-
-warning:
-    sbi PORTD, 6        ; Yellow
-    sbi PORTB, 0        ; Buzzer
-    rjmp update_display
-
-safe:
-    sbi PORTD, 5        ; Green
-    cbi PORTB, 0        ; Buzzer
-
-update_display:
-    rcall display_value
-    mov r16, r17
-    rcall send_uart
+; ------------------ Display 1234 ------------------
+display_1234:
+    ldi r24, 1
+    ldi r25, 4
+    rcall spi_write
+    ldi r24, 2
+    ldi r25, 3
+    rcall spi_write
+    ldi r24, 3
+    ldi r25, 2
+    rcall spi_write
+    ldi r24, 4
+    ldi r25, 1
+    rcall spi_write
     ret
-    reti
+
+; ------------------ MAX7219 Init ------------------
+max7219_init:
+    ldi r24, 0x0F     ; Display Test = Off
+    ldi r25, 0x00
+    rcall spi_write
+    ldi r24, 0x0C     ; Shutdown = Normal
+    ldi r25, 0x01
+    rcall spi_write
+    ldi r24, 0x09     ; Decode Mode = No decode
+    ldi r25, 0x00
+    rcall spi_write
+    ldi r24, 0x0A     ; Intensity = medium
+    ldi r25, 0x0F
+    rcall spi_write
+    ldi r24, 0x0B     ; Scan Limit = 3 digits
+    ldi r25, 0x03
+    rcall spi_write
+    ret
+
+; ------------------ SPI WRITE (r24=addr, r25=data) ------------------
+spi_write:
+    cbi PORTB, 2      ; CS LOW
+    out SPDR, r24
+wait1:
+    in r16, SPSR
+    sbrs r16, SPIF
+    rjmp wait1
+    out SPDR, r25
+wait2:
+    in r16, SPSR
+    sbrs r16, SPIF
+    rjmp wait2
+    sbi PORTB, 2      ; CS HIGH
+    rcall delay_ms    ; wait a little
+    ret
+
+; ------------------ Display 2 digits (r24) ------------------
+display_digits:
+    rcall divide10
+    ldi r24, 1
+    mov r25, r20
+    rcall spi_write
+    ldi r24, 2
+    mov r25, r21
+    rcall spi_write
+    ret
+
+; ------------------ Divide r24 by 10 → r21=quot, r20=rem ------------------
+divide10:
+    clr r21
+div_loop:
+    cpi r24, 10
+    brlo div_done
+    subi r24, 10
+    inc r21
+    rjmp div_loop
+div_done:
+    mov r20, r24
+    ret
+
+; ------------------ USART TX Byte ------------------
+usart_tx:
+wait_udre:
+    lds r16, UCSR0A
+    sbrs r16, UDRE0
+    rjmp wait_udre
+    sts UDR0, r24
+    ret
+
+; ------------------ Send ADC Value as Decimal ------------------
+send_decimal:
+    rcall divide10
+    mov r22, r20
+    mov r23, r21
+    rcall divide10
+    mov r21, r20
+    ldi r24, '0'
+    add r24, r21
+    rcall usart_tx
+    ldi r24, '0'
+    add r24, r23
+    rcall usart_tx
+    ldi r24, '0'
+    add r24, r22
+    rcall usart_tx
+    ldi r24, 10       ; newline
+    rcall usart_tx
+    ret
+
+; ------------------ Simple Delay ------------------
+delay_ms:
+    ldi r18, 50
+outer:
+    ldi r19, 255
+inner:
+    dec r19
+    brne inner
+    dec r18
+    brne outer
+    ret
+
+; ------------------ LED Blink Sequence ------------------
+blink_leds:
+    sbi PORTD, 5
+    rcall delay_ms
+    cbi PORTD, 5
+    sbi PORTD, 6
+    rcall delay_ms
+    cbi PORTD, 6
+    sbi PORTD, 7
+    rcall delay_ms
+    cbi PORTD, 7
+    ret

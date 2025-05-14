@@ -1,9 +1,3 @@
-;
-; MAX7219_Display_Test.S - Simple test for MAX7219 seven-segment display
-;
-; This code initializes the MAX7219 and displays numbers 1234 on the 7-segment display
-;
-
 #define __SFR_OFFSET 0x00
 #include "avr/io.h"
 
