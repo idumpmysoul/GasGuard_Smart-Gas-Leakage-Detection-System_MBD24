@@ -82,9 +82,9 @@ adc_wait:
     rcall display_adc_value
     
     ; Check thresholds and set indicators
-    cpi r21, 200
+    cpi r21, 3
     brsh danger_level
-    cpi r21, 100
+    cpi r21, 2
     brsh warning_level
     
 safe_level:
