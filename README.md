@@ -76,3 +76,9 @@ Untuk pengembangan lebih lanjut, beberapa hal yang disarankan:
 * Mengintegrasikan **logging data sensor** ke komputer melalui UART, agar data bisa direkam dan dianalisis dari waktu ke waktu.
 
 Secara keseluruhan, GasGuard menunjukkan sudah dapat digunakan sebagai sistem monitoring gas CO sederhana yang cepat, ringan, dan efektif untuk kebutuhan dasar.
+
+## Daftar Anggota Kelompok
+* ABEDNEGO ZEBUA - 2306161883		
+* ARSINTA KIRANA NISA - 2306215980
+* CHRISTOVER ANGELO LASUT - 2306220343			
+* GEDE RAMA - 2306161914
