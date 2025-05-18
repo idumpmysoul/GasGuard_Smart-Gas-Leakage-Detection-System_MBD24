@@ -33,7 +33,7 @@ Program utama ditulis dalam bahasa Assembly AVR yang dioptimalkan untuk ATmega32
 
 Kode terdiri dari modul pengaturan UART, SPI, ADC, timer delay, dan handler interrupt yang dijalankan secara efisien untuk memastikan performa optimal.
 Berikut adalah flowchart general mengenai alur kerja alat GasGuard:
-![Flowchart_GasGuard](https://hackmd.io/_uploads/H1-JMkv-xx.png)
+![Finpro_Flowchart](https://hackmd.io/_uploads/HypmfJPWgg.png)
 ## Test Results and Performance Evaluation
 
 Pengujian dilakukan dengan memberikan konsentrasi gas CO pada sensor MQ-7 dan memantau respons LED, buzzer, dan tampilan 7-segmen. Hasilnya:
