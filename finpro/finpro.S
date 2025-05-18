@@ -1,3 +1,4 @@
+
 #define __SFR_OFFSET 0x00
 #include <avr/io.h>
 
@@ -11,6 +12,7 @@
 .section .text
 .global main
 .global INT0_vect
+.global TIMER1_COMPA_vect  ; Add Timer1 interrupt vector
 
 ; Register usage:
 ; r19 - Buzzer state flag (0 = OFF, 1 = ON)
@@ -28,6 +30,7 @@ main:
 
     ; ------------------ I/O Setup ------------------
     rcall init_io        ; Setup I/O ports
+    rcall timer1_init    ; Initialize Timer1 for periodic readings
 
     ; ------------------ Startup Sequence ------------------
     rcall uart_init      ; Initialize UART first to send messages
@@ -60,8 +63,16 @@ main:
     ; Enable global interrupts
     sei
 
-; Main program loop
+; Main program loop - now empty since work is done in timer interrupt
 main_loop:
+    rjmp main_loop       ; Just loop indefinitely
+
+; Timer1 Compare Match A Interrupt Handler
+TIMER1_COMPA_vect:
+    push r16             ; Save register
+    in r16, SREG
+    push r16             ; Save status register
+    
     ; Start ADC conversion
     lds r16, ADCSRA
     ori r16, (1<<ADSC)
@@ -102,7 +113,7 @@ safe_level:
     rcall uart_send_decimal
     rcall uart_send_newline
     
-    rjmp main_delay
+    rjmp timer1_done
     
 warning_level:
     cbi PORTD, 5         ; Green LED OFF
@@ -119,7 +130,7 @@ warning_level:
     rcall uart_send_decimal
     rcall uart_send_newline
     
-    rjmp main_delay
+    rjmp timer1_done
     
 danger_level:
     cbi PORTD, 5         ; Green LED OFF
@@ -141,14 +152,12 @@ skip_buzzer:
     rcall uart_send_decimal
     rcall uart_send_newline
     
-main_delay:
-    rcall delay_500ms    ; Delay before next reading
-    rjmp main_loop
-
-; Reset button pressed (non-interrupt handling)
-; [This function is not used since we're using INT0 interrupt]
-reset_pressed:
-    ret
+timer1_done:
+    ; Restore registers
+    pop r16
+    out SREG, r16
+    pop r16
+    reti
 
 ; Interrupt handler for external interrupt INT0 (reset button)
 INT0_vect:
@@ -182,6 +191,28 @@ int0_done:
     out SREG, r16
     pop r16
     reti
+
+; ------------------ Timer1 Initialization ------------------
+timer1_init:
+    ; Set Output Compare Register for 1 second interval
+    ; 16MHz / 256 prescaler = 62,500 ticks per second
+    ldi r16, 0xF4          ; High byte of 62500 (0xF424)
+    sts OCR1AH, r16
+    ldi r16, 0x24          ; Low byte of 62500
+    sts OCR1AL, r16
+    
+    ; Configure Timer1 in CTC mode (Clear Timer on Compare)
+    ldi r16, (1<<WGM12)    ; CTC mode, TOP=OCR1A
+    sts TCCR1B, r16
+    
+    ; Enable Timer1 Compare A interrupt
+    ldi r16, (1<<OCIE1A)
+    sts TIMSK1, r16
+    
+    ; Start timer with 256 prescaler
+    ldi r16, (1<<CS12)|(1<<WGM12)  ; 256 prescaler + CTC mode
+    sts TCCR1B, r16
+    ret
 
 ; ------------------ Initialization Functions ------------------
 
