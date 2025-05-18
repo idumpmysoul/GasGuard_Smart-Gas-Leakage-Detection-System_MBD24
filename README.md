@@ -42,10 +42,3 @@ Pengujian dilakukan dengan memberikan konsentrasi gas CO pada sensor MQ-7 dan me
 
 ## Conclusion and Future Work
 
-
-
-Dengan perbaikan tersebut, GasGuard dapat menjadi solusi proteksi lingkungan dan rumah tangga yang lebih canggih dan handal.
-
----
-
-Kalau ingin saya buatkan versi markdown siap pakai, atau perlu tambahan bagian tertentu, tinggal bilang ya!
