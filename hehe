@@ -1,0 +1,19 @@
+@echo off
+echo Microsoft Windows [Version 10.0.19044.3324]
+echo (c) Microsoft Corporation. All rights reserved.
+echo.
+echo C:\Users\host^>ping 10.0.2.25
+echo.
+echo Pinging 10.0.2.25 with 32 bytes of data:
+echo Reply from 10.0.2.25: bytes=32 time<1ms TTL=128
+echo Reply from 10.0.2.25: bytes=32 time<1ms TTL=128
+echo Reply from 10.0.2.25: bytes=32 time<1ms TTL=128
+echo Reply from 10.0.2.25: bytes=32 time<1ms TTL=128
+echo.
+echo Ping statistics for 10.0.2.25:
+echo     Packets: Sent = 4, Received = 4, Lost = 0 (0%% loss),
+echo Approximate round trip times in milli-seconds:
+echo     Minimum = 0ms, Maximum = 0ms, Average = 0ms
+echo.
+echo C:\Users\host^>
+pause
